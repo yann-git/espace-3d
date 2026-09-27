@@ -4,7 +4,7 @@ Prototype de scène 3D du système solaire (trajectoires des sondes Voyager, New
 
 - Scène 3D : `index.html`
 - Carte 2D : `carte2d.html`
-- Animations des missions (Apollo 11, Voyager, Halley, Artemis, Lune, planètes) : `animations.html`
+- Animations des missions (Apollo 11, Voyager, Halley, Rosetta et 67P, Artemis, Lune, planètes) : `animations.html`
 - Aperçu du récit StoryMap : `storymap.html`
 
 Distances au Soleil en échelle logarithmique, tailles des planètes non à l'échelle.

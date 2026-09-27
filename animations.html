@@ -145,6 +145,12 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
   const SIZES = { "Soleil": 1.6e6, "Mercure": 150e3, "Vénus": 210e3, "Terre": 220e3, "Mars": 170e3, "Jupiter": 560e3,
                   "Saturne": 1.0e6, "Uranus": 330e3, "Neptune": 330e3, "Pluton": 110e3 };
   const EARTH_GEO = 2 * 6371 * K_GEO * 3, MOON_GEO = 2 * 1737 * K_GEO * 3;
+  // per-frame settings: km -> scene metres, centre name, follow range, trail share, star shell
+  const FRAMES = {
+    helio:  { stars: 3.6e7, follow: [1.2e6, 2.5e7], trail: 0.12, glow: 40e3 },
+    geo:    { km: K_GEO, centre: "du centre de la Terre", stars: 2.6e7, follow: [4e5, 1.4e7], trail: 0.35, glow: 25e3 },
+    comete: { km: 1e4, centre: "du centre du noyau de 67P", stars: 2.4e7, follow: [3e4, 1.2e7], trail: 0.08, glow: 6e3 },
+  };
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const $ = (id) => document.getElementById(id);
   const ICON_PLAY = '<svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z" fill="currentColor"/></svg>';
@@ -161,6 +167,9 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
     constraints: { collision: { enabled: false } }, ui: { components: [] },
   });
   window.__view = view;
+  // keep the scene centre inside the free area between the panels
+  const setPadding = () => { view.padding = innerWidth > 820 ? { left: 280, right: 360, top: 0, bottom: 170 } : { top: 90, bottom: 290, left: 0, right: 0 }; };
+  setPadding(); addEventListener("resize", setPadding);
 
   // ------------------------------------------------------------------ helpers
   const P = (x, y, z) => new Point({ x, y, z, spatialReference: SR });
@@ -228,7 +237,7 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
     statics.removeAll();
     const g = [];
     if (sc.frame === "helio") {
-      g.push(...stars(3.6e7, 1400, 7));
+      g.push(...stars(FRAMES.helio.stars, 1400, 7));
       g.push(new Graphic({ geometry: new Polygon({ rings: [ring(dLog(125))], hasZ: true, spatialReference: SR }),
         symbol: { type: "polygon-3d", symbolLayers: [{ type: "fill", material: { color: [70, 110, 200, 0.06] } }] } }));
       [[1, "1 UA"], [5.2, "5 UA"], [30, "30 UA"], [121, "121 UA · héliopause"]].forEach(([au, t]) => {
@@ -241,11 +250,19 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
         { type: "object", resource: { href: MODELS + "soleil.gltf" }, height: SIZES["Soleil"], anchor: "center" },
         { type: "object", resource: { primitive: "sphere" }, height: SIZES["Soleil"] * 1.7, anchor: "center",
           material: { color: [255, 180, 50, 0.2] } }] } }));
-    } else {
-      g.push(...stars(2.6e7, 1200, 11));
+    } else if (sc.frame === "geo") {
+      g.push(...stars(FRAMES.geo.stars, 1200, 11));
       g.push(new Graphic({ geometry: P(0, 0, 0), symbol: { type: "point-3d", symbolLayers: [
         { type: "object", resource: { href: MODELS + "terre.gltf" }, height: EARTH_GEO, anchor: "center" }] } }));
       g.push(new Graphic({ geometry: P(0, 0, 0), symbol: labelSymbol({ name: "Terre" }) }));
+    } else {  // comet 67P: a two-lobed nucleus, about 4.1 x 2.6 km, true scale
+      g.push(...stars(FRAMES.comete.stars, 1200, 23));
+      const rock = [118, 112, 104, 1], km = FRAMES.comete.km;
+      g.push(new Graphic({ geometry: P(0, 0, 0), symbol: { type: "point-3d", symbolLayers: [
+        { type: "object", resource: { primitive: "sphere" }, width: 4.1 * km, depth: 3.3 * km, height: 1.8 * km, anchor: "center", material: { color: rock } },
+        { type: "object", resource: { primitive: "sphere" }, width: 2.6 * km, depth: 2.3 * km, height: 1.8 * km, anchor: "relative",
+          anchorPosition: { x: -0.95, y: 0, z: -0.15 }, material: { color: rock } }] } }));
+      g.push(new Graphic({ geometry: P(0, 0, 0), symbol: labelSymbol({ name: "67P" }) }));
     }
     sc.static.forEach(s => g.push(new Graphic({ geometry: new Polyline({ paths: [chunk(s.xyz)], hasZ: true, spatialReference: SR }),
                                                 symbol: lineSym(s.colour, 1, 0.45) })));
@@ -267,7 +284,7 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
     $("title").textContent = sc.title; $("text").textContent = sc.text;
     $("target").innerHTML = sc.objects.map(o => `<option${o.name === sc.follow ? " selected" : ""}>${o.name}</option>`).join("");
     followName = sc.follow;
-    const f = sc.frame === "geo" || (sc.t1 - sc.t0) < 40 * 864e5 ? fmtShortDay : fmtShort;
+    const f = sc.frame !== "helio" || (sc.t1 - sc.t0) < 40 * 864e5 ? fmtShortDay : fmtShort;
     $("t0").textContent = f.format(sc.t0); $("t1").textContent = f.format(sc.t1);
     $("ticks").innerHTML = sc.events.map(e => `<i style="left:${(e.t - sc.t0) / (sc.t1 - sc.t0) * 100}%" title="${e.text}"></i>`).join("");
     buildStatic(sc);
@@ -277,7 +294,7 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
       labelG[o.name] = new Graphic({ geometry: P(0, 0, 0), symbol: labelSymbol(o) });
       bodies.addMany([bodyG[o.name], labelG[o.name]]);
       if (o.kind !== "planète" && o.kind !== "lune") {
-        trailG[o.name] = new Graphic({ symbol: glowSym(o.colour, sc.frame === "helio" ? 40e3 : 25e3) });
+        trailG[o.name] = new Graphic({ symbol: glowSym(o.colour, FRAMES[sc.frame].glow) });
         trails.add(trailG[o.name]);
       }
     });
@@ -296,7 +313,7 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
   }
   function followDistance() {
     const z = +$("zoom").value / 100;  // 0 close .. 1 far
-    const [near, far] = sc.frame === "helio" ? [1.2e6, 2.5e7] : [4e5, 1.4e7];
+    const [near, far] = FRAMES[sc.frame].follow;
     return near * Math.pow(far / near, z);
   }
   let followHeading = 0;
@@ -333,7 +350,7 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
     const now = performance.now();
     if (forceTrail || now - lastTrail > 90) {
       lastTrail = now;
-      const span = (sc.t1 - sc.t0) * (sc.frame === "helio" ? 0.12 : 0.35);
+      const span = (sc.t1 - sc.t0) * FRAMES[sc.frame].trail;
       Object.entries(trailG).forEach(([name, g]) => {
         const o = sc.objects.find(x => x.name === name), pts = pathBetween(o, t - span, t, 160);
         g.geometry = pts.length > 1 ? new Polyline({ paths: [pts], hasZ: true, spatialReference: SR }) : null;
@@ -345,14 +362,14 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
     }
     // date, readout, events
     const d = new Date(t);
-    $("date").innerHTML = fmtDate.format(d) + (sc.frame === "geo" ? `<small>${fmtTime.format(d)} UTC</small>` : "");
+    $("date").innerHTML = fmtDate.format(d) + (sc.frame !== "helio" ? `<small>${fmtTime.format(d)} UTC</small>` : "");
     $("time").value = Math.round((t - sc.t0) / (sc.t1 - sc.t0) * 10000);
     const o = sc.objects.find(x => x.name === followName), p = o && pos(o, t);
     if (p) {
       const r = Math.hypot(p[0], p[1], p[2]);
       $("readout").innerHTML = sc.frame === "helio"
         ? `<b>${o.name}</b> à ${nf1.format(R0 * (Math.pow(10, r / K_HELIO) - 1))} UA du Soleil`
-        : `<b>${o.name}</b> à ${nf.format(r / K_GEO)} km du centre de la Terre`;
+        : `<b>${o.name}</b> à ${nf.format(r / FRAMES[sc.frame].km)} km ${FRAMES[sc.frame].centre}`;
     } else $("readout").textContent = o ? `${o.name} n'est pas encore parti` : "";
     let idx = -1; sc.events.forEach((e, i) => { if (e.t <= t) idx = i; });
     if (idx !== eventIdx) {
