@@ -392,6 +392,7 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
     requestAnimationFrame(frame);
   }
   function setPlaying(v) {
+    if (!sc) return;
     playing = v;
     if (v && t >= sc.t1) t = sc.t0;
     $("play").innerHTML = v ? ICON_PAUSE : ICON_PLAY;
@@ -401,7 +402,7 @@ require(["esri/Map", "esri/views/SceneView", "esri/layers/GraphicsLayer", "esri/
   // ------------------------------------------------------------------ UI wiring
   $("play").onclick = () => setPlaying(!playing);
   $("speed").onchange = (e) => (speedFactor = +e.target.value);
-  $("time").oninput = (e) => { t = sc.t0 + (sc.t1 - sc.t0) * e.target.value / 10000; update(true); };
+  $("time").oninput = (e) => { if (!sc) return; t = sc.t0 + (sc.t1 - sc.t0) * e.target.value / 10000; update(true); };
   $("camFixed").onclick = () => setMode("fixed");
   $("camFollow").onclick = () => setMode("follow");
   $("target").onchange = (e) => { followName = e.target.value; if (mode === "follow") setMode("follow"); update(true); };
